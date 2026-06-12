@@ -8,8 +8,8 @@ public class Sound{
     // ===== ĐỔI TÊN FILE ÂM THANH TẠI ĐÂY =====
     public static final String EAT      = "eat.wav";
     public static final String GAME_OVER = "gameover.wav";
-    public static final String BONUS    = "eat.wav";   // thay bằng file khác nếu có
-    public static final String POISON   = "gameover.wav"; // thay bằng file khác nếu có
+    public static final String BONUS    = "bonus.wav";   // 
+    public static final String POISON   = "gameover.wav"; // 
     // ============================================
 
     public static void play(String fileName) {
