@@ -13,7 +13,7 @@ public class Snake {
     public Snake() {
         reset();
     }
-// Hàm reset để khởi động lại rắn về trạng thái ban đẩu - không cần tạo object mới
+
     public void reset() {
         x.clear();
         y.clear();
