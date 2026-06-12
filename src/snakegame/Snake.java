@@ -7,16 +7,17 @@ public class Snake {
     private ArrayList<Integer> x = new ArrayList<>();
     private ArrayList<Integer> y = new ArrayList<>();
 
-    private int bodyParts = 6;
+    private int  bodyParts = 6;
     private char direction = 'R';
 
-    public Snake() {
-        reset();
-    }
+    // Trail glow: lưu các vị trí cũ để vẽ hiệu ứng đuôi mờ dần
+    private ArrayList<int[]> trail = new ArrayList<>();
+    private static final int TRAIL_LEN = 5;
+
+    public Snake() { reset(); }
 
     public void reset() {
-        x.clear();
-        y.clear();
+        x.clear(); y.clear(); trail.clear();
         bodyParts = 6;
         direction = 'R';
         for (int i = 0; i < bodyParts; i++) {
@@ -26,6 +27,12 @@ public class Snake {
     }
 
     public void move() {
+        // Lưu vị trí đuôi trước khi dịch chuyển (cho trail)
+        if (bodyParts > 0) {
+            trail.add(new int[]{ x.get(bodyParts - 1), y.get(bodyParts - 1) });
+            if (trail.size() > TRAIL_LEN) trail.remove(0);
+        }
+
         for (int i = bodyParts - 1; i > 0; i--) {
             x.set(i, x.get(i - 1));
             y.set(i, y.get(i - 1));
@@ -45,18 +52,16 @@ public class Snake {
     }
 
     public boolean checkCollision() {
-        for (int i = bodyParts - 1; i > 0; i--) {
-            if (x.get(0).equals(x.get(i)) && y.get(0).equals(y.get(i)))
-                return true;
-        }
-        if (x.get(0) < 0 || x.get(0) >= 600 || y.get(0) < 0 || y.get(0) >= 600)
-            return true;
+        for (int i = bodyParts - 1; i > 0; i--)
+            if (x.get(0).equals(x.get(i)) && y.get(0).equals(y.get(i))) return true;
+        if (x.get(0) < 0 || x.get(0) >= 600 || y.get(0) < 0 || y.get(0) >= 600) return true;
         return false;
     }
 
-    public ArrayList<Integer> getX() { return x; }
-    public ArrayList<Integer> getY() { return y; }
-    public int getBodyParts() { return bodyParts; }
-    public void setDirection(char dir) { this.direction = dir; }
-    public char getDirection() { return direction; }
+    public ArrayList<Integer>  getX()          { return x; }
+    public ArrayList<Integer>  getY()          { return y; }
+    public int                 getBodyParts()  { return bodyParts; }
+    public void                setDirection(char dir) { this.direction = dir; }
+    public char                getDirection()  { return direction; }
+    public ArrayList<int[]>    getTrail()      { return trail; }
 }
