@@ -9,7 +9,7 @@ public class Sound{
     public static final String EAT      = "eat.wav";
     public static final String GAME_OVER = "gameover.wav";
     public static final String BONUS    = "bonus.wav";   // 
-    public static final String POISON   = "gameover.wav"; // 
+    public static final String POISON   = "poison.wav"; // 
     // ============================================
 
     public static void play(String fileName) {
