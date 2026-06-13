@@ -4,19 +4,24 @@ import java.util.ArrayList;
 
 public class Snake {
 
-    private ArrayList<Integer> x = new ArrayList<>();
-    private ArrayList<Integer> y = new ArrayList<>();
+    protected ArrayList<Integer> x = new ArrayList<>();
+    protected ArrayList<Integer> y = new ArrayList<>();
 
-    private int  bodyParts = 6;
-    private char direction = 'R';
+    protected int  bodyParts = 6;
+    protected char direction = 'R';
 
     // Trail glow: lưu các vị trí cũ để vẽ hiệu ứng đuôi mờ dần
-    private ArrayList<int[]> trail = new ArrayList<>();
+    protected ArrayList<int[]> trail = new ArrayList<>();
     private static final int TRAIL_LEN = 5;
 
-    public Snake() { reset(); }
+    public Snake() {
+        // Gọi trực tiếp logic init thay vì reset() để tránh
+        // subclass override reset() bị gọi trước khi fields của subclass sẵn sàng
+        initDefault();
+    }
 
-    public void reset() {
+    /** Khởi tạo vị trí mặc định P1: đầu (100,100) hướng R */
+    protected void initDefault() {
         x.clear(); y.clear(); trail.clear();
         bodyParts = 6;
         direction = 'R';
@@ -24,6 +29,11 @@ public class Snake {
             x.add(100 - i * 25);
             y.add(100);
         }
+    }
+
+    /** Reset P1 về vị trí ban đầu (subclass override để đặt vị trí riêng) */
+    public void reset() {
+        initDefault();
     }
 
     public void move() {
@@ -58,10 +68,10 @@ public class Snake {
         return false;
     }
 
-    public ArrayList<Integer>  getX()          { return x; }
-    public ArrayList<Integer>  getY()          { return y; }
-    public int                 getBodyParts()  { return bodyParts; }
+    public ArrayList<Integer>  getX()         { return x; }
+    public ArrayList<Integer>  getY()         { return y; }
+    public int                 getBodyParts() { return bodyParts; }
     public void                setDirection(char dir) { this.direction = dir; }
-    public char                getDirection()  { return direction; }
-    public ArrayList<int[]>    getTrail()      { return trail; }
+    public char                getDirection() { return direction; }
+    public ArrayList<int[]>    getTrail()     { return trail; }
 }
