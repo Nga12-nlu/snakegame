@@ -3,6 +3,7 @@ package snakegame;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.List;
 import java.util.Random;
 
 public class GamePanel extends JPanel implements ActionListener {
@@ -36,6 +37,10 @@ public class GamePanel extends JPanel implements ActionListener {
     // Skin được chọn từ StartScreen
     private SnakeSkin skin;
 
+    // ── MAP (THÊM MỚI) ────────────────────────────────────────────────────────
+    private MapType      currentMap;
+    private List<int[]>  walls;   // danh sách ô tường [{x,y},...]
+
     public GamePanel() {
         this.setPreferredSize(new Dimension(SCREEN_WIDTH, SCREEN_HEIGHT));
         this.setBackground(Color.black);
@@ -46,6 +51,9 @@ public class GamePanel extends JPanel implements ActionListener {
 
     public void startGame() {
         skin        = StartScreen.chosenSkin;   // ← đọc skin đã chọn
+        currentMap  = StartScreen.chosenMap;    // ← đọc map đã chọn (THÊM MỚI)
+        walls       = currentMap.buildWalls();  // ← xây dựng danh sách tường (THÊM MỚI)
+
         snake       = new Snake();
         normalFood  = new Food(FoodType.NORMAL);
         specialFood = null;
@@ -100,12 +108,14 @@ public class GamePanel extends JPanel implements ActionListener {
 
         if (running) {
             drawBackground(g2);
+            drawWalls(g2);          // THÊM MỚI: vẽ tường map
             drawFood(g2);
             drawSnake(g2);
             drawHUD(g2);
             if (paused) drawPause(g2);
         } else {
             drawBackground(g2);
+            drawWalls(g2);          // THÊM MỚI: vẫn vẽ tường khi game over
             drawGameOver(g2);
         }
     }
@@ -116,6 +126,32 @@ public class GamePanel extends JPanel implements ActionListener {
         g.setColor(new Color(35, 35, 35));
         for (int i = 0; i < SCREEN_WIDTH;  i += TILE_SIZE) g.drawLine(i, 0, i, SCREEN_HEIGHT);
         for (int j = 0; j < SCREEN_HEIGHT; j += TILE_SIZE) g.drawLine(0, j, SCREEN_WIDTH, j);
+    }
+
+    /**
+     * THÊM MỚI – Vẽ tường của map hiện tại.
+     * Mỗi ô tường được vẽ với gradient nhẹ để trông đẹp hơn.
+     */
+    private void drawWalls(Graphics2D g) {
+        if (walls == null || walls.isEmpty()) return;
+        Color wallColor = currentMap.accentColor;
+        Color wallDark  = wallColor.darker().darker();
+        for (int[] wall : walls) {
+            int wx = wall[0], wy = wall[1];
+            // Bóng đổ nhẹ
+            g.setColor(new Color(0, 0, 0, 100));
+            g.fillRect(wx + 3, wy + 3, TILE_SIZE, TILE_SIZE);
+            // Thân tường
+            g.setColor(wallDark);
+            g.fillRect(wx, wy, TILE_SIZE, TILE_SIZE);
+            // Vệt sáng phía trên / trái
+            g.setColor(wallColor);
+            g.fillRect(wx + 1, wy + 1, TILE_SIZE - 4, 4);
+            g.fillRect(wx + 1, wy + 1, 4, TILE_SIZE - 4);
+            // Điểm góc sáng
+            g.setColor(wallColor.brighter());
+            g.fillRect(wx + 1, wy + 1, 3, 3);
+        }
     }
 
     private void drawFood(Graphics2D g) {
@@ -184,6 +220,13 @@ public class GamePanel extends JPanel implements ActionListener {
             g.setColor(i < lives ? new Color(255, 60, 60) : new Color(80, 80, 80));
             g.drawString("♥", 410 + i * 30, 28);
         }
+
+        // THÊM MỚI: Hiển thị tên map góc phải trên
+        g.setFont(new Font("Consolas", Font.PLAIN, 11));
+        g.setColor(currentMap.accentColor);
+        String mapLabel = "Map: " + currentMap.displayName;
+        int labelW = g.getFontMetrics().stringWidth(mapLabel);
+        g.drawString(mapLabel, SCREEN_WIDTH - labelW - 8, 15);
 
         // Gợi ý special food đang có
         if (specialFood != null) {
@@ -257,6 +300,8 @@ public class GamePanel extends JPanel implements ActionListener {
         if (hx == normalFood.getX() && hy == normalFood.getY()) {
             snake.grow();
             normalFood.randomize();
+            // THÊM MỚI: randomize lại nếu food nằm trên tường
+            while (isOnWall(normalFood.getX(), normalFood.getY())) normalFood.randomize();
             score += FoodType.NORMAL.points;
             Sound.play(Sound.EAT);
             spawnSpecialFood();
@@ -280,7 +325,25 @@ public class GamePanel extends JPanel implements ActionListener {
     public void checkCollision() {
         if (!flashing && snake.checkCollision()) {
             loseLife();
+            return;
         }
+        // THÊM MỚI: va chạm tường map
+        if (!flashing) {
+            int hx = snake.getX().get(0), hy = snake.getY().get(0);
+            if (isOnWall(hx, hy)) {
+                loseLife();
+            }
+        }
+    }
+
+    /**
+     * THÊM MỚI – Kiểm tra tọa độ (px, py) có nằm trên tường không.
+     */
+    private boolean isOnWall(int px, int py) {
+        for (int[] wall : walls) {
+            if (wall[0] == px && wall[1] == py) return true;
+        }
+        return false;
     }
 
     public class MyKeyAdapter extends KeyAdapter {

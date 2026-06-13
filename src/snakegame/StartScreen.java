@@ -15,8 +15,15 @@ public class StartScreen extends JPanel {
     // GamePanel đọc biến này để lấy skin
     public static SnakeSkin chosenSkin = SnakeSkin.CLASSIC;
 
+    // THÊM MỚI: biến lưu map đã chọn, GamePanel đọc biến này
+    public static MapType chosenMap = MapType.OPEN;
+
+    private MapType   selectedMap  = MapType.OPEN;
+    private JLabel    selectedMapLabel = null;
+
     public StartScreen(GameFrame frame) {
-        this.setPreferredSize(new Dimension(600, 680));
+        // THAY ĐỔI: tăng chiều cao panel để chứa thêm khu chọn map
+        this.setPreferredSize(new Dimension(600, 820));
         this.setLayout(null);
         this.setBackground(new Color(10, 10, 18));
 
@@ -109,9 +116,59 @@ public class StartScreen extends JPanel {
             this.add(card);
         }
 
+        // ── MAP SELECTOR (THÊM MỚI) ────────────────────────────
+        JLabel mapTitle = new JLabel("CHỌN MAP");
+        mapTitle.setBounds(0, 458, 600, 24);
+        mapTitle.setFont(new Font("Consolas", Font.BOLD, 14));
+        mapTitle.setForeground(new Color(100, 200, 255));
+        mapTitle.setHorizontalAlignment(SwingConstants.CENTER);
+        this.add(mapTitle);
+
+        MapType[] maps = MapType.values();
+        int mCardW = 170, mCardH = 60, mGapX = 10, mGapY = 8;
+        // 3 map mỗi hàng
+        int mStartX = (600 - (mCardW * 3 + mGapX * 2)) / 2;
+        int mStartY = 488;
+
+        for (int i = 0; i < maps.length; i++) {
+            MapType map = maps[i];
+            int col = i % 3, row = i / 3;
+            int cx = mStartX + col * (mCardW + mGapX);
+            int cy = mStartY + row * (mCardH + mGapY);
+
+            JLabel mCard = buildMapCard(map, mCardW, mCardH);
+            mCard.setBounds(cx, cy, mCardW, mCardH);
+
+            if (map == MapType.OPEN) {
+                mCard.setBorder(new LineBorder(new Color(100, 200, 255), 2));
+                selectedMapLabel = mCard;
+            }
+
+            mCard.addMouseListener(new MouseAdapter() {
+                @Override public void mousePressed(MouseEvent e) {
+                    if (selectedMapLabel != null)
+                        selectedMapLabel.setBorder(new LineBorder(new Color(50, 50, 60), 1));
+                    selectedMap      = map;
+                    chosenMap        = map;
+                    selectedMapLabel = mCard;
+                    mCard.setBorder(new LineBorder(map.accentColor, 2));
+                }
+                @Override public void mouseEntered(MouseEvent e) {
+                    if (mCard != selectedMapLabel)
+                        mCard.setBorder(new LineBorder(map.accentColor.darker(), 1));
+                    mCard.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                }
+                @Override public void mouseExited(MouseEvent e) {
+                    if (mCard != selectedMapLabel)
+                        mCard.setBorder(new LineBorder(new Color(50, 50, 60), 1));
+                }
+            });
+            this.add(mCard);
+        }
+
         // ── NÚT CHƠI ──────────────────────────────────────────
         JButton btn = new JButton("▶  CHƠI NGAY");
-        btn.setBounds(175, 548, 250, 52);
+        btn.setBounds(175, 690, 250, 52);
         btn.setFont(new Font("Consolas", Font.BOLD, 19));
         btn.setBackground(new Color(0, 190, 65));
         btn.setForeground(Color.WHITE);
@@ -124,19 +181,21 @@ public class StartScreen extends JPanel {
         });
         btn.addActionListener(e -> {
             chosenSkin = selectedSkin;
+            chosenMap  = selectedMap;   // THÊM MỚI: lưu map trước khi start
             frame.startGame();
         });
         this.add(btn);
 
         // ── VERSION ────────────────────────────────────────────
-        JLabel ver = new JLabel("v2.0 Deluxe");
-        ver.setBounds(0, 618, 600, 20);
+        JLabel ver = new JLabel("v2.1 Map Edition");
+        ver.setBounds(0, 760, 600, 20);
         ver.setFont(new Font("Consolas", Font.PLAIN, 11));
         ver.setForeground(new Color(70, 70, 80));
         ver.setHorizontalAlignment(SwingConstants.CENTER);
         this.add(ver);
     }
 
+    // ── BUILD SKIN CARD (giữ nguyên) ───────────────────────────────────────
     private JLabel buildSkinCard(SnakeSkin skin, int w, int h) {
         JLabel card = new JLabel() {
             @Override
@@ -166,6 +225,68 @@ public class StartScreen extends JPanel {
                 g2.setFont(new Font("Consolas", Font.PLAIN, 9));
                 g2.setColor(new Color(160, 160, 170));
                 g2.drawString(skin.description, 8, h - 9);
+                super.paintComponent(g);
+            }
+        };
+        card.setOpaque(false);
+        card.setBorder(new LineBorder(new Color(50, 50, 60), 1));
+        return card;
+    }
+
+    // ── BUILD MAP CARD (THÊM MỚI) ──────────────────────────────────────────
+    private JLabel buildMapCard(MapType map, int w, int h) {
+        JLabel card = new JLabel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                                    RenderingHints.VALUE_ANTIALIAS_ON);
+
+                // Nền card
+                g2.setColor(new Color(18, 18, 28));
+                g2.fillRoundRect(0, 0, w - 1, h - 1, 10, 10);
+
+                // Mini preview: vẽ tường thu nhỏ (scale = 1/12 so với 600px)
+                double scale = (h - 20.0) / 600.0;
+                int previewSize = (int)((h - 20) * 1.0);
+                int px = 6, py = 10;
+
+                // Nền mini map
+                g2.setColor(new Color(30, 30, 45));
+                g2.fillRect(px, py, previewSize, previewSize);
+
+                // Tường mini
+                g2.setColor(map.accentColor);
+                for (int[] wall : map.buildWalls()) {
+                    int wx = (int)(wall[0] * scale) + px;
+                    int wy = (int)(wall[1] * scale) + py;
+                    int ws = Math.max(2, (int)(25 * scale));
+                    g2.fillRect(wx, wy, ws, ws);
+                }
+
+                // Tên map
+                g2.setFont(new Font("Consolas", Font.BOLD, 12));
+                g2.setColor(map.accentColor);
+                g2.drawString(map.displayName, previewSize + px + 6, py + 16);
+
+                // Mô tả map
+                g2.setFont(new Font("Consolas", Font.PLAIN, 9));
+                g2.setColor(new Color(160, 160, 170));
+                // Xuống dòng nếu dài
+                String desc = map.description;
+                int maxW = w - previewSize - px - 10;
+                FontMetrics fm = g2.getFontMetrics();
+                if (fm.stringWidth(desc) > maxW) {
+                    // Chia 2 dòng thô
+                    int mid = desc.length() / 2;
+                    int sp  = desc.lastIndexOf(' ', mid);
+                    if (sp < 0) sp = mid;
+                    g2.drawString(desc.substring(0, sp), previewSize + px + 6, py + 30);
+                    g2.drawString(desc.substring(sp + 1), previewSize + px + 6, py + 42);
+                } else {
+                    g2.drawString(desc, previewSize + px + 6, py + 30);
+                }
+
                 super.paintComponent(g);
             }
         };
