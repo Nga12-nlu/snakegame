@@ -1,15 +1,9 @@
 package snakegame;
 
-/**
- * Snake2 – Rắn của Player 2.
- * Xuất phát từ góc phải dưới (500, 500), hướng đi sang trái (L).
- */
 public class Snake2 extends Snake {
 
     public Snake2() {
-        // Snake() gọi initDefault() (không gọi reset()),
-        // nên Snake2() an toàn để override reset() sau đó.
-        reset(); // đặt lại vị trí P2 ngay sau khi super() xong
+        reset();
     }
 
     @Override
@@ -19,10 +13,12 @@ public class Snake2 extends Snake {
         if (trail != null) trail.clear();
         bodyParts = 6;
         direction = 'L';
-        // Đầu ở (500,500), đuôi kéo sang phải
+        // Đầu xuất phát ở góc phải dưới của world, đuôi kéo sang phải
+        int startX = GameConfig.WORLD_WIDTH  - 300;
+        int startY = GameConfig.WORLD_HEIGHT - 300;
         for (int i = 0; i < bodyParts; i++) {
-            x.add(500 + i * 25);
-            y.add(500);
+            x.add(startX + i * 25);
+            y.add(startY);
         }
     }
 }

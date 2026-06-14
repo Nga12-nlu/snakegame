@@ -297,7 +297,7 @@ public class StartScreen extends JPanel {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(new Color(18,18,28));
                 g2.fillRoundRect(0,0,w-1,h-1,10,10);
-                double scale = (h-20.0)/600.0;
+                double scale = (h-20.0)/GameConfig.WORLD_WIDTH;
                 int ps = (int)(h-20), px=6, py=10;
                 g2.setColor(new Color(30,30,45));
                 g2.fillRect(px,py,ps,ps);

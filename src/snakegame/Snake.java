@@ -20,14 +20,17 @@ public class Snake {
         initDefault();
     }
 
-    /** Khởi tạo vị trí mặc định P1: đầu (100,100) hướng R */
+    /** Khởi tạo vị trí mặc định P1: đầu ở góc trên-trái khu trung tâm, hướng R */
     protected void initDefault() {
         x.clear(); y.clear(); trail.clear();
         bodyParts = 6;
         direction = 'R';
+        // Spawn cách mép world 1 chút và tránh vùng tường biên (BORDER cách mép 4 ô = 100px)
+        int startX = 150;
+        int startY = 150;
         for (int i = 0; i < bodyParts; i++) {
-            x.add(100 - i * 25);
-            y.add(100);
+            x.add(startX - i * 25);
+            y.add(startY);
         }
     }
 
@@ -64,7 +67,8 @@ public class Snake {
     public boolean checkCollision() {
         for (int i = bodyParts - 1; i > 0; i--)
             if (x.get(0).equals(x.get(i)) && y.get(0).equals(y.get(i))) return true;
-        if (x.get(0) < 0 || x.get(0) >= 600 || y.get(0) < 0 || y.get(0) >= 600) return true;
+        if (x.get(0) < 0 || x.get(0) >= GameConfig.WORLD_WIDTH
+         || y.get(0) < 0 || y.get(0) >= GameConfig.WORLD_HEIGHT) return true;
         return false;
     }
 

@@ -3,6 +3,7 @@ package snakegame;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -10,17 +11,20 @@ public class GamePanel extends JPanel implements ActionListener {
 
     private static final long serialVersionUID = 1L;
 
-    private final int SCREEN_WIDTH  = 600;
-    private final int SCREEN_HEIGHT = 600;
-    private final int TILE_SIZE     = 25;
+    private final int SCREEN_WIDTH  = GameConfig.VIEW_WIDTH;
+    private final int SCREEN_HEIGHT = GameConfig.VIEW_HEIGHT;
+    private final int TILE_SIZE     = GameConfig.TILE_SIZE;
+    private final int WORLD_WIDTH   = GameConfig.WORLD_WIDTH;
+    private final int WORLD_HEIGHT  = GameConfig.WORLD_HEIGHT;
     private final int BASE_DELAY    = 120;
 
-    // THÊM MỚI: load highScore từ file ngay khi class được nạp
     static int highScore = ScoreManager.loadHighScore();
 
     private Snake  snake;
-    private Food   normalFood;
-    private Food   specialFood;   // bonus hoặc poison, xuất hiện ngẫu nhiên
+
+    // ── FOOD: danh sách nhiều food cùng lúc (THÊM MỚI) ─────────────────────
+    private List<Food> normalFoods;
+    private Food       specialFood;
 
     private Timer   timer;
     private boolean running = false;
@@ -38,9 +42,12 @@ public class GamePanel extends JPanel implements ActionListener {
     // Skin được chọn từ StartScreen
     private SnakeSkin skin;
 
-    // ── MAP (THÊM MỚI) ────────────────────────────────────────────────────────
+    // Map
     private MapType      currentMap;
-    private List<int[]>  walls;   // danh sách ô tường [{x,y},...]
+    private List<int[]>  walls;
+
+    // ── CAMERA (THÊM MỚI) ────────────────────────────────────────────────────
+    private int camX = 0, camY = 0;
 
     public GamePanel() {
         this.setPreferredSize(new Dimension(SCREEN_WIDTH, SCREEN_HEIGHT));
@@ -51,12 +58,16 @@ public class GamePanel extends JPanel implements ActionListener {
     }
 
     public void startGame() {
-        skin        = StartScreen.chosenSkin;   // ← đọc skin đã chọn
-        currentMap  = StartScreen.chosenMap;    // ← đọc map đã chọn (THÊM MỚI)
-        walls       = currentMap.buildWalls();  // ← xây dựng danh sách tường (THÊM MỚI)
+        skin        = StartScreen.chosenSkin;
+        currentMap  = StartScreen.chosenMap;
+        walls       = currentMap.buildWalls();
 
         snake       = new Snake();
-        normalFood  = new Food(FoodType.NORMAL);
+        ensureSafeSpawn(snake);
+        normalFoods = new ArrayList<>();
+        for (int i = 0; i < GameConfig.FOOD_COUNT; i++) {
+            normalFoods.add(spawnFoodSafe(FoodType.NORMAL));
+        }
         specialFood = null;
         running     = true;
         paused      = false;
@@ -65,9 +76,46 @@ public class GamePanel extends JPanel implements ActionListener {
         level       = 1;
         flashing    = false;
 
+        updateCamera();
+
         if (timer != null) timer.stop();
         timer = new Timer(BASE_DELAY, this);
         timer.start();
+    }
+
+    /** THÊM MỚI – Cập nhật camera để theo dõi đầu rắn, kẹp trong biên world. */
+    private void updateCamera() {
+        int headX = snake.getX().get(0);
+        int headY = snake.getY().get(0);
+
+        camX = headX - SCREEN_WIDTH / 2;
+        camY = headY - SCREEN_HEIGHT / 2;
+
+        // Kẹp camera trong biên world
+        camX = Math.max(0, Math.min(camX, WORLD_WIDTH  - SCREEN_WIDTH));
+        camY = Math.max(0, Math.min(camY, WORLD_HEIGHT - SCREEN_HEIGHT));
+
+        // Snap về lưới TILE_SIZE để tránh giật hình
+        camX = (camX / TILE_SIZE) * TILE_SIZE;
+        camY = (camY / TILE_SIZE) * TILE_SIZE;
+    }
+
+    /** THÊM MỚI – Spawn food tránh tường và thân rắn. */
+    private Food spawnFoodSafe(FoodType type) {
+        Food f = new Food(type);
+        int tries = 0;
+        while (tries++ < 200) {
+            if (!isOnWall(f.getX(), f.getY()) && !isOnSnake(f.getX(), f.getY())) break;
+            f.randomize();
+        }
+        return f;
+    }
+
+    private boolean isOnSnake(int px, int py) {
+        if (snake == null) return false;
+        for (int i = 0; i < snake.getBodyParts(); i++)
+            if (snake.getX().get(i) == px && snake.getY().get(i) == py) return true;
+        return false;
     }
 
     private void loseLife() {
@@ -76,18 +124,20 @@ public class GamePanel extends JPanel implements ActionListener {
         if (lives <= 0) {
             running = false;
             timer.stop();
-            ScoreManager.saveHighScore(highScore); // THÊM MỚI: lưu khi kết thúc game
+            ScoreManager.saveHighScore(highScore);
         } else {
             snake.reset();
+            ensureSafeSpawn(snake);
             flashing   = true;
             flashCount = 0;
+            updateCamera();
         }
     }
 
     private void spawnSpecialFood() {
         int r = random.nextInt(100);
-        if      (r < 30) specialFood = new Food(FoodType.BONUS);
-        else if (r < 50) specialFood = new Food(FoodType.POISON);
+        if      (r < 30) specialFood = spawnFoodSafe(FoodType.BONUS);
+        else if (r < 50) specialFood = spawnFoodSafe(FoodType.POISON);
     }
 
     private void updateLevel() {
@@ -109,14 +159,15 @@ public class GamePanel extends JPanel implements ActionListener {
 
         if (running) {
             drawBackground(g2);
-            drawWalls(g2);          // THÊM MỚI: vẽ tường map
+            drawWalls(g2);
             drawFood(g2);
             drawSnake(g2);
             drawHUD(g2);
+            drawMinimap(g2);
             if (paused) drawPause(g2);
         } else {
             drawBackground(g2);
-            drawWalls(g2);          // THÊM MỚI: vẫn vẽ tường khi game over
+            drawWalls(g2);
             drawGameOver(g2);
         }
     }
@@ -125,43 +176,41 @@ public class GamePanel extends JPanel implements ActionListener {
         g.setColor(new Color(20, 20, 20));
         g.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
         g.setColor(new Color(35, 35, 35));
-        for (int i = 0; i < SCREEN_WIDTH;  i += TILE_SIZE) g.drawLine(i, 0, i, SCREEN_HEIGHT);
-        for (int j = 0; j < SCREEN_HEIGHT; j += TILE_SIZE) g.drawLine(0, j, SCREEN_WIDTH, j);
+        // THÊM MỚI: vẽ lưới theo camera offset
+        int startX = -(camX % TILE_SIZE);
+        int startY = -(camY % TILE_SIZE);
+        for (int i = startX; i < SCREEN_WIDTH;  i += TILE_SIZE) g.drawLine(i, 0, i, SCREEN_HEIGHT);
+        for (int j = startY; j < SCREEN_HEIGHT; j += TILE_SIZE) g.drawLine(0, j, SCREEN_WIDTH, j);
     }
 
-    /**
-     * THÊM MỚI – Vẽ tường của map hiện tại.
-     * Mỗi ô tường được vẽ với gradient nhẹ để trông đẹp hơn.
-     */
     private void drawWalls(Graphics2D g) {
         if (walls == null || walls.isEmpty()) return;
         Color wallColor = currentMap.accentColor;
         Color wallDark  = wallColor.darker().darker();
         for (int[] wall : walls) {
-            int wx = wall[0], wy = wall[1];
-            // Bóng đổ nhẹ
+            int wx = wall[0] - camX, wy = wall[1] - camY;
+            // Bỏ qua nếu ngoài viewport
+            if (wx < -TILE_SIZE || wx > SCREEN_WIDTH || wy < -TILE_SIZE || wy > SCREEN_HEIGHT) continue;
             g.setColor(new Color(0, 0, 0, 100));
             g.fillRect(wx + 3, wy + 3, TILE_SIZE, TILE_SIZE);
-            // Thân tường
             g.setColor(wallDark);
             g.fillRect(wx, wy, TILE_SIZE, TILE_SIZE);
-            // Vệt sáng phía trên / trái
             g.setColor(wallColor);
             g.fillRect(wx + 1, wy + 1, TILE_SIZE - 4, 4);
             g.fillRect(wx + 1, wy + 1, 4, TILE_SIZE - 4);
-            // Điểm góc sáng
             g.setColor(wallColor.brighter());
             g.fillRect(wx + 1, wy + 1, 3, 3);
         }
     }
 
     private void drawFood(Graphics2D g) {
-        drawFoodItem(g, normalFood);
+        for (Food f : normalFoods) drawFoodItem(g, f);
         if (specialFood != null) drawFoodItem(g, specialFood);
     }
 
     private void drawFoodItem(Graphics2D g, Food food) {
-        int fx = food.getX(), fy = food.getY();
+        int fx = food.getX() - camX, fy = food.getY() - camY;
+        if (fx < -TILE_SIZE || fx > SCREEN_WIDTH || fy < -TILE_SIZE || fy > SCREEN_HEIGHT) return;
         Color c = food.getType().color;
         g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 60));
         g.fillOval(fx - 4, fy - 4, 33, 33);
@@ -172,19 +221,16 @@ public class GamePanel extends JPanel implements ActionListener {
     }
 
     private void drawSnake(Graphics2D g) {
-        // Flash effect khi mất mạng
         if (flashing && (flashCount / 2) % 2 == 1) return;
 
         for (int i = 0; i < snake.getBodyParts(); i++) {
-            int sx = snake.getX().get(i);
-            int sy = snake.getY().get(i);
+            int sx = snake.getX().get(i) - camX;
+            int sy = snake.getY().get(i) - camY;
 
             if (i == 0) {
-                // Đầu rắn — dùng headColor của skin
                 g.setColor(skin.headColor);
                 g.fillRoundRect(sx + 1, sy + 1, 23, 23, 8, 8);
 
-                // Mắt rắn
                 g.setColor(Color.BLACK);
                 char dir = snake.getDirection();
                 if      (dir == 'R') { g.fillOval(sx+16, sy+5,  5, 5); g.fillOval(sx+16, sy+15, 5, 5); }
@@ -193,7 +239,6 @@ public class GamePanel extends JPanel implements ActionListener {
                 else                 { g.fillOval(sx+5,  sy+16, 5, 5); g.fillOval(sx+15, sy+16, 5, 5); }
 
             } else {
-                // Thân rắn — xen kẽ 2 màu của skin
                 g.setColor(i % 2 == 0 ? skin.bodyColorLight : skin.bodyColorDark);
                 g.fillRoundRect(sx + 2, sy + 2, 21, 21, 6, 6);
             }
@@ -201,7 +246,6 @@ public class GamePanel extends JPanel implements ActionListener {
     }
 
     private void drawHUD(Graphics2D g) {
-        // Nền HUD phía trên
         g.setColor(new Color(0, 0, 0, 160));
         g.fillRect(0, 0, SCREEN_WIDTH, 45);
 
@@ -216,33 +260,65 @@ public class GamePanel extends JPanel implements ActionListener {
         g.setColor(new Color(100, 200, 255));
         g.drawString("Lv." + level, 300, 28);
 
-        // Trái tim (máu)
         for (int i = 0; i < 3; i++) {
             g.setColor(i < lives ? new Color(255, 60, 60) : new Color(80, 80, 80));
             g.drawString("♥", 410 + i * 30, 28);
         }
 
-        // THÊM MỚI: Hiển thị tên map góc phải trên
         g.setFont(new Font("Consolas", Font.PLAIN, 11));
         g.setColor(currentMap.accentColor);
         String mapLabel = "Map: " + currentMap.displayName;
         int labelW = g.getFontMetrics().stringWidth(mapLabel);
         g.drawString(mapLabel, SCREEN_WIDTH - labelW - 8, 15);
 
-        // THÊM MỚI: icon âm thanh + gợi ý phím M
         g.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 12));
         g.setColor(new Color(180, 180, 180));
         String soundIcon = (Sound.isMuted() ? "🔇" : "🔊") + " [M]";
         int soundW = g.getFontMetrics().stringWidth(soundIcon);
         g.drawString(soundIcon, SCREEN_WIDTH - soundW - 8, 32);
 
-        // Gợi ý special food đang có
         if (specialFood != null) {
             String hint = specialFood.getType() == FoodType.BONUS ? "★ BONUS +30!" : "☠ POISON!";
             g.setColor(specialFood.getType().color);
             g.setFont(new Font("Consolas", Font.BOLD, 13));
             g.drawString(hint, 10, SCREEN_HEIGHT - 10);
         }
+    }
+
+    /** THÊM MỚI – Vẽ minimap nhỏ góc dưới phải, hiển thị vị trí rắn trong world. */
+    private void drawMinimap(Graphics2D g) {
+        int mmSize = 90;
+        int mmX = SCREEN_WIDTH - mmSize - 10;
+        int mmY = SCREEN_HEIGHT - mmSize - 10;
+        double scale = (double) mmSize / WORLD_WIDTH;
+
+        // Nền minimap
+        g.setColor(new Color(0, 0, 0, 150));
+        g.fillRoundRect(mmX - 4, mmY - 4, mmSize + 8, mmSize + 8, 8, 8);
+        g.setColor(new Color(50, 50, 60));
+        g.drawRoundRect(mmX - 4, mmY - 4, mmSize + 8, mmSize + 8, 8, 8);
+
+        // Tường (thu nhỏ)
+        g.setColor(currentMap.accentColor);
+        for (int[] wall : walls) {
+            int wx = mmX + (int)(wall[0] * scale);
+            int wy = mmY + (int)(wall[1] * scale);
+            g.fillRect(wx, wy, 2, 2);
+        }
+
+        // Khung viewport hiện tại
+        g.setColor(new Color(255, 255, 255, 180));
+        int vx = mmX + (int)(camX * scale);
+        int vy = mmY + (int)(camY * scale);
+        int vw = (int)(SCREEN_WIDTH * scale);
+        int vh = (int)(SCREEN_HEIGHT * scale);
+        g.drawRect(vx, vy, vw, vh);
+
+        // Đầu rắn
+        g.setColor(skin.headColor);
+        int hx = mmX + (int)(snake.getX().get(0) * scale);
+        int hy = mmY + (int)(snake.getY().get(0) * scale);
+        g.fillOval(hx - 2, hy - 2, 5, 5);
     }
 
     private void drawPause(Graphics2D g) {
@@ -298,8 +374,8 @@ public class GamePanel extends JPanel implements ActionListener {
             checkFood();
             checkCollision();
             updateLevel();
+            updateCamera();
 
-            // THÊM MỚI: cập nhật highScore ngay khi vượt qua (để shutdown hook lưu đúng)
             if (score > highScore) highScore = score;
 
             if (specialFood != null && specialFood.isExpired()) specialFood = null;
@@ -311,14 +387,17 @@ public class GamePanel extends JPanel implements ActionListener {
     public void checkFood() {
         int hx = snake.getX().get(0), hy = snake.getY().get(0);
 
-        if (hx == normalFood.getX() && hy == normalFood.getY()) {
-            snake.grow();
-            normalFood.randomize();
-            // THÊM MỚI: randomize lại nếu food nằm trên tường
-            while (isOnWall(normalFood.getX(), normalFood.getY())) normalFood.randomize();
-            score += FoodType.NORMAL.points;
-            Sound.play(Sound.EAT);
-            spawnSpecialFood();
+        // THÊM MỚI: kiểm tra toàn bộ danh sách normalFoods
+        for (Food f : normalFoods) {
+            if (hx == f.getX() && hy == f.getY()) {
+                snake.grow();
+                score += FoodType.NORMAL.points;
+                Sound.play(Sound.EAT);
+                f.randomize();
+                while (isOnWall(f.getX(), f.getY()) || isOnSnake(f.getX(), f.getY())) f.randomize();
+                spawnSpecialFood();
+                break; // chỉ ăn 1 food mỗi tick
+            }
         }
 
         if (specialFood != null &&
@@ -341,7 +420,6 @@ public class GamePanel extends JPanel implements ActionListener {
             loseLife();
             return;
         }
-        // THÊM MỚI: va chạm tường map
         if (!flashing) {
             int hx = snake.getX().get(0), hy = snake.getY().get(0);
             if (isOnWall(hx, hy)) {
@@ -350,9 +428,21 @@ public class GamePanel extends JPanel implements ActionListener {
         }
     }
 
-    /**
-     * THÊM MỚI – Kiểm tra tọa độ (px, py) có nằm trên tường không.
-     */
+    /** Đảm bảo vị trí spawn của rắn không nằm trên tường; nếu có, dịch về vị trí an toàn (250,250). */
+    private void ensureSafeSpawn(Snake s) {
+        for (int i = 0; i < s.getBodyParts(); i++) {
+            if (isOnWall(s.getX().get(i), s.getY().get(i))) {
+                int offsetX = 250 - s.getX().get(0);
+                int offsetY = 250 - s.getY().get(0);
+                for (int j = 0; j < s.getBodyParts(); j++) {
+                    s.getX().set(j, s.getX().get(j) + offsetX);
+                    s.getY().set(j, s.getY().get(j) + offsetY);
+                }
+                break;
+            }
+        }
+    }
+
     private boolean isOnWall(int px, int py) {
         for (int[] wall : walls) {
             if (wall[0] == px && wall[1] == py) return true;

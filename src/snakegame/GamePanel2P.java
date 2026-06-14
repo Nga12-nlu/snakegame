@@ -3,34 +3,38 @@ package snakegame;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
 /**
- * GamePanel2P – Chế độ 2 người chơi kiểu slither.io.
+ * GamePanel2P – Chế độ 2 người chơi kiểu slither.io trên world lớn (1200x1200).
  *
  * Luật chơi:
  *  - Đâm vào THÂN đối thủ → người đâm mất 1 mạng, đối thủ vẫn sống.
  *  - Đâm ĐẦU vào ĐẦU nhau → cả 2 mất 1 mạng.
  *  - Ai hết 3 mạng trước → thua.
- *  - Food chung, ai ăn trước được điểm & dài hơn.
+ *  - Nhiều food chung, ai ăn trước được điểm & dài hơn.
  *
  * Điều khiển:
  *  - Player 1 (đỏ): ↑ ↓ ← →
  *  - Player 2 (xanh): W A S D
+ *
+ * Camera theo trung điểm giữa 2 đầu rắn, kẹp trong biên world.
  */
 public class GamePanel2P extends JPanel implements ActionListener {
 
     private static final long serialVersionUID = 1L;
 
-    private final int SCREEN_WIDTH  = 600;
-    private final int SCREEN_HEIGHT = 600;
-    private final int TILE_SIZE     = 25;
+    private final int SCREEN_WIDTH  = GameConfig.VIEW_WIDTH;
+    private final int SCREEN_HEIGHT = GameConfig.VIEW_HEIGHT;
+    private final int TILE_SIZE     = GameConfig.TILE_SIZE;
+    private final int WORLD_WIDTH   = GameConfig.WORLD_WIDTH;
+    private final int WORLD_HEIGHT  = GameConfig.WORLD_HEIGHT;
     private final int BASE_DELAY    = 120;
 
-    // ── Rắn 2 người ───────────────────────────────────────────────────────
-    private Snake snake1;   // Player 1 – mũi tên
-    private Snake snake2;   // Player 2 – WASD
+    private Snake snake1;
+    private Snake snake2;
 
     private SnakeSkin skin1;
     private SnakeSkin skin2;
@@ -38,29 +42,29 @@ public class GamePanel2P extends JPanel implements ActionListener {
     private int score1 = 0, score2 = 0;
     private int lives1 = 3, lives2 = 3;
 
-    // ── Food ──────────────────────────────────────────────────────────────
-    private Food normalFood;
-    private Food specialFood;
+    private List<Food> normalFoods;
+    private Food       specialFood;
 
-    // ── Map ───────────────────────────────────────────────────────────────
     private MapType     currentMap;
     private List<int[]> walls;
 
-    // ── Trạng thái game ───────────────────────────────────────────────────
     private Timer   timer;
     private boolean running = false;
     private boolean paused  = false;
     private int     level   = 1;
     private Random  random  = new Random();
 
-    // Flash effect riêng cho từng rắn
     private boolean flashing1 = false, flashing2 = false;
     private int     flashCount1 = 0,   flashCount2 = 0;
 
-    // Kết quả trận
-    private String winner = "";   // "Player 1", "Player 2", "Draw"
+    private String winner = "";
 
-    // ── Constructor ───────────────────────────────────────────────────────
+    // ── CAMERA ────────────────────────────────────────────────────────────
+    private int camX = 0, camY = 0;
+    private double zoom = 1.0;
+    private static final double MIN_ZOOM = 0.35;   // zoom tối thiểu (xa nhất)
+    private static final int    MARGIN   = 120;    // lề quanh 2 rắn (px world)
+
     public GamePanel2P() {
         this.setPreferredSize(new Dimension(SCREEN_WIDTH, SCREEN_HEIGHT));
         this.setBackground(Color.BLACK);
@@ -69,18 +73,21 @@ public class GamePanel2P extends JPanel implements ActionListener {
         startGame();
     }
 
-    // ── Khởi động / Restart ───────────────────────────────────────────────
     public void startGame() {
         skin1      = StartScreen.chosenSkin;
         skin2      = StartScreen.chosenSkin2;
         currentMap = StartScreen.chosenMap;
         walls      = currentMap.buildWalls();
 
-        // Rắn 1 xuất phát bên trái, rắn 2 bên phải
-        snake1 = new Snake();                   // mặc định xuất phát (100,100) đi R
-        snake2 = new Snake2();                  // xuất phát (500,500) đi L
+        snake1 = new Snake();
+        snake2 = new Snake2();
+        ensureSafeSpawn(snake1, 250, 250);
+        ensureSafeSpawn(snake2, GameConfig.WORLD_WIDTH - 300, GameConfig.WORLD_HEIGHT - 300);
 
-        normalFood  = spawnFoodSafe(FoodType.NORMAL);
+        normalFoods = new ArrayList<>();
+        for (int i = 0; i < GameConfig.FOOD_COUNT; i++) {
+            normalFoods.add(spawnFoodSafe(FoodType.NORMAL));
+        }
         specialFood = null;
 
         score1 = score2 = 0;
@@ -91,12 +98,48 @@ public class GamePanel2P extends JPanel implements ActionListener {
         flashing1 = flashing2 = false;
         winner  = "";
 
+        updateCamera();
+
         if (timer != null) timer.stop();
         timer = new Timer(BASE_DELAY, this);
         timer.start();
     }
 
-    // ── Spawn food tránh tường & thân 2 rắn ──────────────────────────────
+    /**
+     * Camera theo trung điểm 2 đầu rắn.
+     * Zoom tự động giảm (phóng ra) khi 2 rắn cách xa nhau, để cả 2 luôn nằm trong khung nhìn.
+     */
+    private void updateCamera() {
+        int x1 = snake1.getX().get(0), y1 = snake1.getY().get(0);
+        int x2 = snake2.getX().get(0), y2 = snake2.getY().get(0);
+
+        int cx = (x1 + x2) / 2;
+        int cy = (y1 + y2) / 2;
+
+        // Khoảng cách cần hiển thị (bao gồm lề margin cho cả 2 phía)
+        int spanX = Math.abs(x1 - x2) + MARGIN * 2;
+        int spanY = Math.abs(y1 - y2) + MARGIN * 2;
+
+        double zoomX = Math.min(1.0, (double) SCREEN_WIDTH  / Math.max(spanX, 1));
+        double zoomY = Math.min(1.0, (double) SCREEN_HEIGHT / Math.max(spanY, 1));
+
+        zoom = Math.max(MIN_ZOOM, Math.min(zoomX, zoomY));
+
+        // Kích thước thực tế nhìn được ở zoom hiện tại
+        double viewW = SCREEN_WIDTH  / zoom;
+        double viewH = SCREEN_HEIGHT / zoom;
+
+        camX = (int) (cx - viewW / 2);
+        camY = (int) (cy - viewH / 2);
+
+        camX = (int) Math.max(0, Math.min(camX, WORLD_WIDTH  - viewW));
+        camY = (int) Math.max(0, Math.min(camY, WORLD_HEIGHT - viewH));
+
+        // Nếu world nhỏ hơn viewport ở zoom này, căn giữa
+        if (viewW > WORLD_WIDTH)  camX = (int) ((WORLD_WIDTH  - viewW) / 2);
+        if (viewH > WORLD_HEIGHT) camY = (int) ((WORLD_HEIGHT - viewH) / 2);
+    }
+
     private Food spawnFoodSafe(FoodType type) {
         Food f = new Food(type);
         int tries = 0;
@@ -107,6 +150,21 @@ public class GamePanel2P extends JPanel implements ActionListener {
             f.randomize();
         }
         return f;
+    }
+
+    /** Đảm bảo vị trí spawn không nằm trên tường; nếu có, dịch về (fallbackX, fallbackY). */
+    private void ensureSafeSpawn(Snake s, int fallbackX, int fallbackY) {
+        for (int i = 0; i < s.getBodyParts(); i++) {
+            if (isOnWall(s.getX().get(i), s.getY().get(i))) {
+                int offsetX = fallbackX - s.getX().get(0);
+                int offsetY = fallbackY - s.getY().get(0);
+                for (int j = 0; j < s.getBodyParts(); j++) {
+                    s.getX().set(j, s.getX().get(j) + offsetX);
+                    s.getY().set(j, s.getY().get(j) + offsetY);
+                }
+                break;
+            }
+        }
     }
 
     private boolean isOnWall(int px, int py) {
@@ -121,7 +179,6 @@ public class GamePanel2P extends JPanel implements ActionListener {
         return false;
     }
 
-    // ── Mất mạng ──────────────────────────────────────────────────────────
     private void loseLife1() {
         lives1--;
         Sound.play(Sound.GAME_OVER);
@@ -131,6 +188,7 @@ public class GamePanel2P extends JPanel implements ActionListener {
             winner = lives2 > 0 ? "Player 2" : "Draw";
         } else {
             snake1.reset();
+            ensureSafeSpawn(snake1, 250, 250);
             flashing1   = true;
             flashCount1 = 0;
         }
@@ -145,12 +203,12 @@ public class GamePanel2P extends JPanel implements ActionListener {
             winner = lives1 > 0 ? "Player 1" : "Draw";
         } else {
             snake2.reset();
+            ensureSafeSpawn(snake2, GameConfig.WORLD_WIDTH - 300, GameConfig.WORLD_HEIGHT - 300);
             flashing2   = true;
             flashCount2 = 0;
         }
     }
 
-    // ── Level ─────────────────────────────────────────────────────────────
     private void updateLevel() {
         int topScore = Math.max(score1, score2);
         int newLevel = topScore / 50 + 1;
@@ -160,11 +218,9 @@ public class GamePanel2P extends JPanel implements ActionListener {
         }
     }
 
-    // ── ActionPerformed (game loop) ───────────────────────────────────────
     @Override
     public void actionPerformed(ActionEvent e) {
         if (running && !paused) {
-            // Flash countdown
             if (flashing1) { flashCount1++; if (flashCount1 >= 10) flashing1 = false; }
             if (flashing2) { flashCount2++; if (flashCount2 >= 10) flashing2 = false; }
 
@@ -174,6 +230,7 @@ public class GamePanel2P extends JPanel implements ActionListener {
             checkFood();
             checkCollisions();
             updateLevel();
+            updateCamera();
 
             if (specialFood != null && specialFood.isExpired()) specialFood = null;
             if (specialFood == null && random.nextInt(200) == 0)
@@ -182,23 +239,25 @@ public class GamePanel2P extends JPanel implements ActionListener {
         repaint();
     }
 
-    // ── Kiểm tra ăn food ──────────────────────────────────────────────────
     private void checkFood() {
         int h1x = snake1.getX().get(0), h1y = snake1.getY().get(0);
         int h2x = snake2.getX().get(0), h2y = snake2.getY().get(0);
 
-        // Normal food
-        if (h1x == normalFood.getX() && h1y == normalFood.getY()) {
-            snake1.grow(); score1 += FoodType.NORMAL.points;
-            Sound.play(Sound.EAT);
-            normalFood = spawnFoodSafe(FoodType.NORMAL);
-        } else if (h2x == normalFood.getX() && h2y == normalFood.getY()) {
-            snake2.grow(); score2 += FoodType.NORMAL.points;
-            Sound.play(Sound.EAT);
-            normalFood = spawnFoodSafe(FoodType.NORMAL);
+        for (Food f : normalFoods) {
+            boolean p1ate = h1x == f.getX() && h1y == f.getY();
+            boolean p2ate = h2x == f.getX() && h2y == f.getY();
+            if (p1ate || p2ate) {
+                if (p1ate) { snake1.grow(); score1 += FoodType.NORMAL.points; }
+                if (p2ate) { snake2.grow(); score2 += FoodType.NORMAL.points; }
+                Sound.play(Sound.EAT);
+                f.randomize();
+                while (isOnWall(f.getX(), f.getY())
+                       || isOnSnake(f.getX(), f.getY(), snake1)
+                       || isOnSnake(f.getX(), f.getY(), snake2)) f.randomize();
+                break;
+            }
         }
 
-        // Special food
         if (specialFood != null) {
             boolean p1ate = h1x == specialFood.getX() && h1y == specialFood.getY();
             boolean p2ate = h2x == specialFood.getX() && h2y == specialFood.getY();
@@ -219,35 +278,29 @@ public class GamePanel2P extends JPanel implements ActionListener {
         }
     }
 
-    // ── Kiểm tra va chạm ─────────────────────────────────────────────────
     private void checkCollisions() {
         int h1x = snake1.getX().get(0), h1y = snake1.getY().get(0);
         int h2x = snake2.getX().get(0), h2y = snake2.getY().get(0);
 
         boolean die1 = false, die2 = false;
 
-        // 1. Va chạm tường map & biên màn hình
         if (!flashing1 && (snake1.checkCollision() || isOnWall(h1x, h1y))) die1 = true;
         if (!flashing2 && (snake2.checkCollision() || isOnWall(h2x, h2y))) die2 = true;
 
-        // 2. Đầu vs Đầu → cả 2 chết
         if (!flashing1 && !flashing2 && h1x == h2x && h1y == h2y) {
             die1 = die2 = true;
         }
 
-        // 3. Đầu P1 đâm vào THÂN P2
         if (!flashing1) {
             for (int i = 1; i < snake2.getBodyParts(); i++)
                 if (h1x == snake2.getX().get(i) && h1y == snake2.getY().get(i)) { die1 = true; break; }
         }
 
-        // 4. Đầu P2 đâm vào THÂN P1
         if (!flashing2) {
             for (int i = 1; i < snake1.getBodyParts(); i++)
                 if (h2x == snake1.getX().get(i) && h2y == snake1.getY().get(i)) { die2 = true; break; }
         }
 
-        // Áp dụng (xử lý đồng thời tránh chain)
         if (die1) loseLife1();
         if (die2) loseLife2();
     }
@@ -260,12 +313,25 @@ public class GamePanel2P extends JPanel implements ActionListener {
         Graphics2D g2 = (Graphics2D) g;
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        drawBackground(g2);
-        drawWalls(g2);
-        drawFood(g2);
-        drawSnake(g2, snake2, skin2, flashing2, flashCount2, 2);
-        drawSnake(g2, snake1, skin1, flashing1, flashCount1, 1);
+        // Nền ngoài world (khi zoom < 1, có thể thấy viền ngoài)
+        g2.setColor(new Color(10, 10, 10));
+        g2.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+        // ── Áp dụng transform: scale theo zoom, dịch theo camera ──────────
+        Graphics2D world = (Graphics2D) g2.create();
+        world.scale(zoom, zoom);
+        world.translate(-camX, -camY);
+
+        drawBackground(world);
+        drawWalls(world);
+        drawFood(world);
+        drawSnake(world, snake2, skin2, flashing2, flashCount2, 2);
+        drawSnake(world, snake1, skin1, flashing1, flashCount1, 1);
+        world.dispose();
+
+        // ── HUD / Minimap / overlay vẽ theo tọa độ màn hình (không scale) ──
         drawHUD(g2);
+        drawMinimap(g2);
 
         if (!running) drawResult(g2);
         else if (paused) drawPause(g2);
@@ -273,10 +339,10 @@ public class GamePanel2P extends JPanel implements ActionListener {
 
     private void drawBackground(Graphics2D g) {
         g.setColor(new Color(20, 20, 20));
-        g.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+        g.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
         g.setColor(new Color(35, 35, 35));
-        for (int i = 0; i < SCREEN_WIDTH;  i += TILE_SIZE) g.drawLine(i, 0, i, SCREEN_HEIGHT);
-        for (int j = 0; j < SCREEN_HEIGHT; j += TILE_SIZE) g.drawLine(0, j, SCREEN_WIDTH, j);
+        for (int i = 0; i <= WORLD_WIDTH;  i += TILE_SIZE) g.drawLine(i, 0, i, WORLD_HEIGHT);
+        for (int j = 0; j <= WORLD_HEIGHT; j += TILE_SIZE) g.drawLine(0, j, WORLD_WIDTH, j);
     }
 
     private void drawWalls(Graphics2D g) {
@@ -297,7 +363,7 @@ public class GamePanel2P extends JPanel implements ActionListener {
     }
 
     private void drawFood(Graphics2D g) {
-        drawFoodItem(g, normalFood);
+        for (Food f : normalFoods) drawFoodItem(g, f);
         if (specialFood != null) drawFoodItem(g, specialFood);
     }
 
@@ -317,19 +383,19 @@ public class GamePanel2P extends JPanel implements ActionListener {
         if (flashing && (flashCount / 2) % 2 == 1) return;
 
         for (int i = 0; i < s.getBodyParts(); i++) {
-            int sx = s.getX().get(i), sy = s.getY().get(i);
+            int sx = s.getX().get(i);
+            int sy = s.getY().get(i);
+
             if (i == 0) {
                 g.setColor(sk.headColor);
                 g.fillRoundRect(sx+1, sy+1, 23, 23, 8, 8);
 
-                // Badge số người chơi
                 g.setColor(new Color(0,0,0,180));
                 g.fillOval(sx+14, sy-2, 12, 12);
                 g.setColor(Color.WHITE);
                 g.setFont(new Font("Consolas", Font.BOLD, 9));
                 g.drawString("P"+playerNum, sx+15, sy+7);
 
-                // Mắt
                 g.setColor(Color.BLACK);
                 char dir = s.getDirection();
                 if      (dir=='R') { g.fillOval(sx+16,sy+5,5,5); g.fillOval(sx+16,sy+15,5,5); }
@@ -344,13 +410,11 @@ public class GamePanel2P extends JPanel implements ActionListener {
     }
 
     private void drawHUD(Graphics2D g) {
-        // Nền HUD
         g.setColor(new Color(0,0,0,180));
         g.fillRect(0, 0, SCREEN_WIDTH, 45);
 
         g.setFont(new Font("Consolas", Font.BOLD, 14));
 
-        // Player 1 (trái)
         g.setColor(skin1.headColor);
         g.drawString("P1", 8, 16);
         g.setColor(Color.WHITE);
@@ -360,14 +424,13 @@ public class GamePanel2P extends JPanel implements ActionListener {
             g.drawString("♥", 8 + i*18, 34);
         }
 
-        // Map name (giữa)
         g.setColor(currentMap.accentColor);
         g.setFont(new Font("Consolas", Font.PLAIN, 11));
-        String mapLbl = "Lv." + level + "  " + currentMap.displayName;
+        String mapLbl = "Lv." + level + "  " + currentMap.displayName
+                      + "  (" + Math.round(zoom * 100) + "%)";
         int mw = g.getFontMetrics().stringWidth(mapLbl);
         g.drawString(mapLbl, (SCREEN_WIDTH - mw) / 2, 28);
 
-        // Player 2 (phải)
         g.setFont(new Font("Consolas", Font.BOLD, 14));
         g.setColor(skin2.headColor);
         String p2lbl = "P2";
@@ -381,7 +444,6 @@ public class GamePanel2P extends JPanel implements ActionListener {
             g.drawString("♥", SCREEN_WIDTH - 60 + i*18, 34);
         }
 
-        // Gợi ý special food
         if (specialFood != null) {
             String hint = specialFood.getType() == FoodType.BONUS ? "★ BONUS +30!" : "☠ POISON!";
             g.setColor(specialFood.getType().color);
@@ -389,16 +451,51 @@ public class GamePanel2P extends JPanel implements ActionListener {
             g.drawString(hint, 10, SCREEN_HEIGHT - 8);
         }
 
-        // Hướng dẫn nhỏ góc phải dưới
         g.setColor(new Color(100,100,100));
         g.setFont(new Font("Consolas", Font.PLAIN, 10));
         g.drawString("P1:Arrows  P2:WASD  P:Pause  M:Sound", SCREEN_WIDTH - 240, SCREEN_HEIGHT - 8);
 
-        // THÊM MỚI: icon âm thanh góc phải trên
         g.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 12));
         g.setColor(new Color(180,180,180));
         String soundIcon = Sound.isMuted() ? "🔇" : "🔊";
         g.drawString(soundIcon, SCREEN_WIDTH - 20, 40);
+    }
+
+    /** Minimap nhỏ góc dưới phải, hiển thị world, tường, 2 đầu rắn và viewport. */
+    private void drawMinimap(Graphics2D g) {
+        int mmSize = 90;
+        int mmX = SCREEN_WIDTH - mmSize - 10;
+        int mmY = SCREEN_HEIGHT - mmSize - 60; // tránh đè lên dòng hướng dẫn
+        double scale = (double) mmSize / WORLD_WIDTH;
+
+        g.setColor(new Color(0, 0, 0, 150));
+        g.fillRoundRect(mmX - 4, mmY - 4, mmSize + 8, mmSize + 8, 8, 8);
+        g.setColor(new Color(50, 50, 60));
+        g.drawRoundRect(mmX - 4, mmY - 4, mmSize + 8, mmSize + 8, 8, 8);
+
+        g.setColor(currentMap.accentColor);
+        for (int[] wall : walls) {
+            int wx = mmX + (int)(wall[0] * scale);
+            int wy = mmY + (int)(wall[1] * scale);
+            g.fillRect(wx, wy, 2, 2);
+        }
+
+        g.setColor(new Color(255, 255, 255, 180));
+        int vx = mmX + (int)(camX * scale);
+        int vy = mmY + (int)(camY * scale);
+        int vw = (int)((SCREEN_WIDTH  / zoom) * scale);
+        int vh = (int)((SCREEN_HEIGHT / zoom) * scale);
+        g.drawRect(vx, vy, vw, vh);
+
+        g.setColor(skin1.headColor);
+        int h1x = mmX + (int)(snake1.getX().get(0) * scale);
+        int h1y = mmY + (int)(snake1.getY().get(0) * scale);
+        g.fillOval(h1x - 2, h1y - 2, 5, 5);
+
+        g.setColor(skin2.headColor);
+        int h2x = mmX + (int)(snake2.getX().get(0) * scale);
+        int h2y = mmY + (int)(snake2.getY().get(0) * scale);
+        g.fillOval(h2x - 2, h2y - 2, 5, 5);
     }
 
     private void drawPause(Graphics2D g) {
@@ -418,14 +515,12 @@ public class GamePanel2P extends JPanel implements ActionListener {
         g.setColor(new Color(30,30,30,230));
         g.fillRoundRect(80, 140, 440, 320, 30, 30);
 
-        // Màu viền theo người thắng
         Color borderColor = winner.equals("Draw") ? new Color(255,215,0)
                           : winner.equals("Player 1") ? skin1.headColor : skin2.headColor;
         g.setColor(borderColor);
         g.setStroke(new BasicStroke(3));
         g.drawRoundRect(80, 140, 440, 320, 30, 30);
 
-        // Tiêu đề
         if (winner.equals("Draw")) {
             g.setColor(new Color(255,215,0));
             g.setFont(new Font("Consolas", Font.BOLD, 44));
@@ -433,17 +528,15 @@ public class GamePanel2P extends JPanel implements ActionListener {
         } else {
             g.setColor(borderColor);
             g.setFont(new Font("Consolas", Font.BOLD, 38));
-            g.drawString(winner + " WINS!", winner.equals("Player 1") ? 148 : 148, 220);
+            g.drawString(winner + " WINS!", 148, 220);
         }
 
-        // Điểm
         g.setFont(new Font("Consolas", Font.BOLD, 20));
         g.setColor(skin1.headColor);
         g.drawString("P1 Score: " + score1, 160, 275);
         g.setColor(skin2.headColor);
         g.drawString("P2 Score: " + score2, 160, 305);
 
-        // Mạng còn lại
         g.setFont(new Font("Consolas", Font.PLAIN, 16));
         g.setColor(new Color(180,180,180));
         g.drawString("P1 lives left: " + Math.max(0, lives1), 160, 340);
@@ -456,27 +549,22 @@ public class GamePanel2P extends JPanel implements ActionListener {
         g.drawString("Nhấn ESC về màn hình chính", 155, 445);
     }
 
-    // ── Input ─────────────────────────────────────────────────────────────
     public class KeyHandler extends KeyAdapter {
         @Override
         public void keyPressed(KeyEvent e) {
             int k = e.getKeyCode();
-            // Player 1 – mũi tên
             if (k == KeyEvent.VK_LEFT  && snake1.getDirection() != 'R') snake1.setDirection('L');
             if (k == KeyEvent.VK_RIGHT && snake1.getDirection() != 'L') snake1.setDirection('R');
             if (k == KeyEvent.VK_UP    && snake1.getDirection() != 'D') snake1.setDirection('U');
             if (k == KeyEvent.VK_DOWN  && snake1.getDirection() != 'U') snake1.setDirection('D');
-            // Player 2 – WASD
             if (k == KeyEvent.VK_A && snake2.getDirection() != 'R') snake2.setDirection('L');
             if (k == KeyEvent.VK_D && snake2.getDirection() != 'L') snake2.setDirection('R');
             if (k == KeyEvent.VK_W && snake2.getDirection() != 'D') snake2.setDirection('U');
             if (k == KeyEvent.VK_S && snake2.getDirection() != 'U') snake2.setDirection('D');
-            // Pause / Restart / ESC về menu
             if (k == KeyEvent.VK_P     && running) paused = !paused;
             if (k == KeyEvent.VK_ENTER && !running) startGame();
-            if (k == KeyEvent.VK_M) Sound.toggleMuted(); // THÊM MỚI: tắt/mở âm
+            if (k == KeyEvent.VK_M) Sound.toggleMuted();
             if (k == KeyEvent.VK_ESCAPE && !running) {
-                // Quay về Start Screen
                 JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(GamePanel2P.this);
                 if (frame instanceof GameFrame) ((GameFrame) frame).showStartScreen();
             }

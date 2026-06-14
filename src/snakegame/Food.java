@@ -6,9 +6,6 @@ public class Food {
 
     private int x;
     private int y;
-    private final int TILE_SIZE = 25;
-    private final int SCREEN_WIDTH = 600;
-    private final int SCREEN_HEIGHT = 600;
 
     private FoodType type;
     private long spawnTime;
@@ -21,8 +18,8 @@ public class Food {
     }
 
     public void randomize() {
-        x = random.nextInt(SCREEN_WIDTH / TILE_SIZE) * TILE_SIZE;
-        y = random.nextInt(SCREEN_HEIGHT / TILE_SIZE) * TILE_SIZE;
+        x = random.nextInt(GameConfig.WORLD_COLS) * GameConfig.TILE_SIZE;
+        y = random.nextInt(GameConfig.WORLD_ROWS) * GameConfig.TILE_SIZE;
         spawnTime = System.currentTimeMillis();
     }
 
