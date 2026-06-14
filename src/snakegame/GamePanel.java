@@ -15,7 +15,8 @@ public class GamePanel extends JPanel implements ActionListener {
     private final int TILE_SIZE     = 25;
     private final int BASE_DELAY    = 120;
 
-    static int highScore = 0;
+    // THÊM MỚI: load highScore từ file ngay khi class được nạp
+    static int highScore = ScoreManager.loadHighScore();
 
     private Snake  snake;
     private Food   normalFood;
@@ -75,7 +76,7 @@ public class GamePanel extends JPanel implements ActionListener {
         if (lives <= 0) {
             running = false;
             timer.stop();
-            if (score > highScore) highScore = score;
+            ScoreManager.saveHighScore(highScore); // THÊM MỚI: lưu khi kết thúc game
         } else {
             snake.reset();
             flashing   = true;
@@ -259,25 +260,28 @@ public class GamePanel extends JPanel implements ActionListener {
         g.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
         g.setColor(new Color(30, 30, 30, 230));
-        g.fillRoundRect(100, 150, 400, 300, 30, 30);
+        g.fillRoundRect(100, 130, 400, 330, 30, 30);
         g.setColor(new Color(200, 50, 50));
         g.setStroke(new BasicStroke(2));
-        g.drawRoundRect(100, 150, 400, 300, 30, 30);
+        g.drawRoundRect(100, 130, 400, 330, 30, 30);
 
         g.setColor(new Color(255, 80, 80));
         g.setFont(new Font("Consolas", Font.BOLD, 48));
-        g.drawString("GAME OVER", 128, 230);
+        g.drawString("GAME OVER", 128, 210);
 
         g.setFont(new Font("Consolas", Font.BOLD, 22));
         g.setColor(Color.WHITE);
-        g.drawString("Score: " + score, 230, 290);
+        g.drawString("Score: " + score, 230, 270);
 
         g.setColor(new Color(255, 215, 0));
-        g.drawString("Best:  " + highScore, 230, 330);
+        g.drawString("Best:  " + highScore, 230, 310);
 
         g.setColor(new Color(150, 255, 150));
         g.setFont(new Font("Consolas", Font.PLAIN, 17));
-        g.drawString("Nhấn ENTER để chơi lại", 178, 400);
+        g.drawString("Nhấn ENTER để chơi lại", 178, 390);
+
+        g.setColor(new Color(150, 150, 255));
+        g.drawString("Nhấn ESC để về menu", 178, 420);
     }
 
     // ===== LOGIC =====
@@ -294,6 +298,9 @@ public class GamePanel extends JPanel implements ActionListener {
             checkFood();
             checkCollision();
             updateLevel();
+
+            // THÊM MỚI: cập nhật highScore ngay khi vượt qua (để shutdown hook lưu đúng)
+            if (score > highScore) highScore = score;
 
             if (specialFood != null && specialFood.isExpired()) specialFood = null;
             if (specialFood == null && random.nextInt(200) == 0) spawnSpecialFood();
@@ -363,7 +370,13 @@ public class GamePanel extends JPanel implements ActionListener {
                 case KeyEvent.VK_DOWN:  if (snake.getDirection() != 'U') snake.setDirection('D'); break;
                 case KeyEvent.VK_P:     if (running) paused = !paused; break;
                 case KeyEvent.VK_ENTER: if (!running) startGame(); break;
-                case KeyEvent.VK_M:     Sound.toggleMuted(); break; // THÊM MỚI: tắt/mở âm
+                case KeyEvent.VK_M:     Sound.toggleMuted(); break;
+                case KeyEvent.VK_ESCAPE:
+                    if (!running) {
+                        JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(GamePanel.this);
+                        if (frame instanceof GameFrame) ((GameFrame) frame).showStartScreen();
+                    }
+                    break;
             }
         }
     }

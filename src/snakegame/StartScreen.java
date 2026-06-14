@@ -25,7 +25,7 @@ public class StartScreen extends JPanel {
     private JLabel    selectedMapLabel = null;
 
     public StartScreen(GameFrame frame) {
-        this.setPreferredSize(new Dimension(600, 980));
+        this.setPreferredSize(new Dimension(600, 1010));
         this.setLayout(null);
         this.setBackground(new Color(10, 10, 18));
 
@@ -43,6 +43,13 @@ public class StartScreen extends JPanel {
         sub.setForeground(new Color(120, 120, 140));
         sub.setHorizontalAlignment(SwingConstants.CENTER);
         this.add(sub);
+
+        JLabel highScoreLbl = new JLabel("🏆 Best Score: " + ScoreManager.loadHighScore());
+        highScoreLbl.setBounds(0, 90, 600, 22);
+        highScoreLbl.setFont(new Font("Consolas", Font.BOLD, 15));
+        highScoreLbl.setForeground(new Color(255, 215, 0));
+        highScoreLbl.setHorizontalAlignment(SwingConstants.CENTER);
+        this.add(highScoreLbl);
 
         // ── NÚT TẮT/MỞ ÂM THANH (THÊM MỚI) ──────────────────────────────────
         JButton soundBtn = new JButton(Sound.isMuted() ? "🔇" : "🔊");
@@ -68,7 +75,7 @@ public class StartScreen extends JPanel {
             {"⬆⬇◀▶","P1 di chuyển  |  P2: W A S D"},
             {"P","Tạm dừng / Tiếp tục"}
         };
-        int yy = 98;
+        int yy = 120;
         for (String[] tip : tips) {
             JLabel icon = new JLabel(tip[0]);
             icon.setBounds(80, yy, 60, 20);
@@ -84,7 +91,7 @@ public class StartScreen extends JPanel {
         }
 
         // ── SKIN P1 ────────────────────────────────────────────────────────
-        int skinY = 226;
+        int skinY = 250;
         addSkinSection("SKIN - PLAYER 1  (↑↓←→)", new Color(255, 215, 0),
                        skinY, true, frame);
 
