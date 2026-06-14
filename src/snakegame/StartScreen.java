@@ -44,6 +44,22 @@ public class StartScreen extends JPanel {
         sub.setHorizontalAlignment(SwingConstants.CENTER);
         this.add(sub);
 
+        // ── NÚT TẮT/MỞ ÂM THANH (THÊM MỚI) ──────────────────────────────────
+        JButton soundBtn = new JButton(Sound.isMuted() ? "🔇" : "🔊");
+        soundBtn.setBounds(555, 10, 38, 38);
+        soundBtn.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 16));
+        soundBtn.setBackground(new Color(30, 30, 42));
+        soundBtn.setForeground(Color.WHITE);
+        soundBtn.setFocusPainted(false);
+        soundBtn.setBorder(new LineBorder(new Color(60, 60, 75), 1));
+        soundBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        soundBtn.setToolTipText("Tắt / Mở âm thanh");
+        soundBtn.addActionListener(e -> {
+            boolean nowMuted = Sound.toggleMuted();
+            soundBtn.setText(nowMuted ? "🔇" : "🔊");
+        });
+        this.add(soundBtn);
+
         // ── HƯỚNG DẪN ──────────────────────────────────────────────────────
         String[][] tips = {
             {"🔴","Food thường  +10 điểm"},

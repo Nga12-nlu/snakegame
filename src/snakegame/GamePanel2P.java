@@ -392,7 +392,13 @@ public class GamePanel2P extends JPanel implements ActionListener {
         // Hướng dẫn nhỏ góc phải dưới
         g.setColor(new Color(100,100,100));
         g.setFont(new Font("Consolas", Font.PLAIN, 10));
-        g.drawString("P1:Arrows  P2:WASD  P:Pause", SCREEN_WIDTH - 202, SCREEN_HEIGHT - 8);
+        g.drawString("P1:Arrows  P2:WASD  P:Pause  M:Sound", SCREEN_WIDTH - 240, SCREEN_HEIGHT - 8);
+
+        // THÊM MỚI: icon âm thanh góc phải trên
+        g.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 12));
+        g.setColor(new Color(180,180,180));
+        String soundIcon = Sound.isMuted() ? "🔇" : "🔊";
+        g.drawString(soundIcon, SCREEN_WIDTH - 20, 40);
     }
 
     private void drawPause(Graphics2D g) {
@@ -468,6 +474,7 @@ public class GamePanel2P extends JPanel implements ActionListener {
             // Pause / Restart / ESC về menu
             if (k == KeyEvent.VK_P     && running) paused = !paused;
             if (k == KeyEvent.VK_ENTER && !running) startGame();
+            if (k == KeyEvent.VK_M) Sound.toggleMuted(); // THÊM MỚI: tắt/mở âm
             if (k == KeyEvent.VK_ESCAPE && !running) {
                 // Quay về Start Screen
                 JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(GamePanel2P.this);

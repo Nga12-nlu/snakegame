@@ -228,6 +228,13 @@ public class GamePanel extends JPanel implements ActionListener {
         int labelW = g.getFontMetrics().stringWidth(mapLabel);
         g.drawString(mapLabel, SCREEN_WIDTH - labelW - 8, 15);
 
+        // THÊM MỚI: icon âm thanh + gợi ý phím M
+        g.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 12));
+        g.setColor(new Color(180, 180, 180));
+        String soundIcon = (Sound.isMuted() ? "🔇" : "🔊") + " [M]";
+        int soundW = g.getFontMetrics().stringWidth(soundIcon);
+        g.drawString(soundIcon, SCREEN_WIDTH - soundW - 8, 32);
+
         // Gợi ý special food đang có
         if (specialFood != null) {
             String hint = specialFood.getType() == FoodType.BONUS ? "★ BONUS +30!" : "☠ POISON!";
@@ -356,6 +363,7 @@ public class GamePanel extends JPanel implements ActionListener {
                 case KeyEvent.VK_DOWN:  if (snake.getDirection() != 'U') snake.setDirection('D'); break;
                 case KeyEvent.VK_P:     if (running) paused = !paused; break;
                 case KeyEvent.VK_ENTER: if (!running) startGame(); break;
+                case KeyEvent.VK_M:     Sound.toggleMuted(); break; // THÊM MỚI: tắt/mở âm
             }
         }
     }

@@ -12,7 +12,12 @@ public class Sound {
     public static final String POISON   = "gameover.wav"; // thay bằng file khác nếu có
     // ============================================
 
+    // THÊM MỚI: trạng thái tắt/mở âm thanh (toàn cục)
+    private static boolean muted = false;
+
     public static void play(String fileName) {
+        if (muted) return;   // THÊM MỚI: không phát nếu đang tắt âm
+
         // Chạy trong thread riêng để không lag game
         new Thread(() -> {
             try {
@@ -29,5 +34,20 @@ public class Sound {
                 e.printStackTrace();
             }
         }).start();
+    }
+
+    // THÊM MỚI: bật/tắt âm thanh
+    public static void setMuted(boolean m) {
+        muted = m;
+    }
+
+    public static boolean isMuted() {
+        return muted;
+    }
+
+    // THÊM MỚI: đảo trạng thái, trả về trạng thái mới
+    public static boolean toggleMuted() {
+        muted = !muted;
+        return muted;
     }
 }
