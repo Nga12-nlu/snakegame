@@ -22,34 +22,57 @@ public class GameFrame extends JFrame {
         this.setVisible(true);
     }
 
-    // Chuyển sang chế độ 1 người
     public void startGame() {
         this.getContentPane().removeAll();
-        gamePanel = new GamePanel();
+        gamePanel = new GamePanel(false);
         this.add(gamePanel);
         this.revalidate();
+        this.pack();
+        this.setLocationRelativeTo(null);
         this.repaint();
         gamePanel.requestFocus();
     }
 
-    // THÊM MỚI: Chuyển sang chế độ 2 người
+    public void startGameVsBot() {
+        this.getContentPane().removeAll();
+        gamePanel = new GamePanel(true);
+        this.add(gamePanel);
+        this.revalidate();
+        this.pack();
+        this.setLocationRelativeTo(null);
+        this.repaint();
+        gamePanel.requestFocus();
+    }
+
     public void startGame2P() {
         this.getContentPane().removeAll();
-        gamePanel2P = new GamePanel2P();
+        gamePanel2P = new GamePanel2P(false);
         this.add(gamePanel2P);
         this.revalidate();
+        this.pack();
+        this.setLocationRelativeTo(null);
         this.repaint();
         gamePanel2P.requestFocus();
     }
 
-    // THÊM MỚI: Quay về Start Screen (từ Game Over 2P)
+    public void startGame2PVsBot() {
+        this.getContentPane().removeAll();
+        gamePanel2P = new GamePanel2P(true);
+        this.add(gamePanel2P);
+        this.revalidate();
+        this.pack();
+        this.setLocationRelativeTo(null);
+        this.repaint();
+        gamePanel2P.requestFocus();
+    }
+
     public void showStartScreen() {
         this.getContentPane().removeAll();
         startScreen = new StartScreen(this);
         this.add(startScreen);
         this.revalidate();
-        this.repaint();
         this.pack();
         this.setLocationRelativeTo(null);
+        this.repaint();
     }
 }
